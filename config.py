@@ -1,2 +1,3 @@
 TELEGRAM_TOKEN = '5792496493:AAEdISosRZptqrYa-yNbO8R9zrat-L5TiIQ'
 TMDB_API_KEY = '5a318417c7f4a722afd9d71df548877b'
+USE_POSTERS = True  # Set to False to disable posters and reduce copyright risk
