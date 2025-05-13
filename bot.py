@@ -4,44 +4,16 @@ import aiohttp
 import config
 import logging
 import urllib.parse
-from PIL import Image, ImageDraw, ImageFont
-import io
-import random
 
 # Set up logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def start(update, context):
-    await update.message.reply_text('Send a movie name, get a copyright-free scene image and details. Data from TMDb.')
-
-async def create_fallback_image(title, year):
-    # Create a 300x450 image with cinematic vibe
-    img = Image.new('RGB', (300, 450))
-    draw = ImageDraw.Draw(img)
-    # Gradient background
-    for y in range(450):
-        r = int(30 + (y / 450) * 80)
-        g = int(30 + (y / 450) * 50)
-        b = int(80 + (y / 450) * 120)
-        draw.line((0, y, 300, y), fill=(r, g, b))
-    # Border
-    draw.rectangle((10, 10, 290, 440), outline=(255, 255, 255), width=3)
-    # Text
-    try:
-        font = ImageFont.truetype("arial.ttf", 18)
-    except:
-        font = ImageFont.load_default()
-    text = f"{title}\n({year})\nMovie Scene"
-    draw.text((20, 180), text, fill=(255, 255, 255), font=font, align='center')
-    # Save to bytes
-    img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format='PNG')
-    img_byte_arr.seek(0)
-    return img_byte_arr
+    await update.message.reply_text('Send a movie name, get a copyright-free scene image (if available) and details. Data from TMDb.')
 
 async def fetch_wikimedia_scene(movie_name):
-    # Search Wikimedia Commons for movie stills or scenes (not posters)
+    # Search Wikimedia Commons for movie stills (not posters)
     url = f'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(movie_name + " movie still -poster")}&srnamespace=6&format=json'
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
@@ -82,9 +54,7 @@ async def search_movie(update, context):
                 if scene_url:
                     await update.message.reply_photo(photo=scene_url, caption=message, parse_mode='Markdown')
                 else:
-                    # Fallback to stylized text image
-                    scene_file = await create_fallback_image(title, year)
-                    await update.message.reply_photo(photo=scene_file, caption=message, parse_mode='Markdown')
+                    await update.message.reply_text(f"{message}\n\nNo copyright-free scene image found. Try an older movie (pre-1929) for images.", parse_mode='Markdown')
             else:
                 await update.message.reply_text('Movie not found. Please check the name and try again.')
 
