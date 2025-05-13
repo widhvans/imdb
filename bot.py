@@ -4,13 +4,38 @@ import aiohttp
 import config
 import logging
 import urllib.parse
+from PIL import Image, ImageDraw, ImageFont
+import io
+import random
 
 # Set up logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def start(update, context):
-    await update.message.reply_text('Hi! Send me a movie name, and I’ll fetch its details. Data from TMDb.')
+    await update.message.reply_text('Hi! Send me a movie name, and I’ll fetch its details with a custom poster. Data from TMDb.')
+
+async def create_custom_poster(title, year):
+    # Create a simple 300x450 image with random background color
+    bg_color = random.choice([(100, 150, 200), (200, 100, 150), (150, 200, 100)])
+    img = Image.new('RGB', (300, 450), bg_color)
+    draw = ImageDraw.Draw(img)
+
+    # Default font (Pillow uses a basic font if none is specified)
+    try:
+        font = ImageFont.truetype("arial.ttf", 24)  # Use Arial if available
+    except:
+        font = ImageFont.load_default()
+
+    # Add movie title and year
+    text = f"{title}\n({year})"
+    draw.text((20, 200), text, fill=(255, 255, 255), font=font)
+
+    # Save image to bytes
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='PNG')
+    img_byte_arr.seek(0)
+    return img_byte_arr
 
 async def search_movie(update, context):
     movie_name = urllib.parse.quote(update.message.text)
@@ -28,21 +53,13 @@ async def search_movie(update, context):
                 year = movie['release_date'][:4] if movie['release_date'] else 'N/A'
                 rating = movie['vote_average'] if movie['vote_average'] else 'N/A'
                 overview = movie['overview'] if movie['overview'] else 'No plot available'
-                poster_path = movie['poster_path']
 
-                # Fetch configuration for poster base URL
-                config_url = f'https://api.themoviedb.org/3/configuration?api_key={api_key}'
-                async with session.get(config_url) as config_response:
-                    config_data = await config_response.json()
-                    base_url = config_data['images']['secure_base_url']
-                    poster_size = 'w500'
+                # Generate custom poster
+                poster_file = await create_custom_poster(title, year)
 
+                # Send response
                 message = f"**{title} ({year})**\nTMDb Rating: {rating}/10\nPlot: {overview}\n\nData from themoviedb.org"
-                if poster_path and config.USE_POSTERS:
-                    poster_url = f"{base_url}{poster_size}{poster_path}"
-                    await update.message.reply_photo(photo=poster_url, caption=message, parse_mode='Markdown')
-                else:
-                    await update.message.reply_text(message, parse_mode='Markdown')
+                await update.message.reply_photo(photo=poster_file, caption=message, parse_mode='Markdown')
             else:
                 await update.message.reply_text('Movie not found. Please check the name and try again.')
 
