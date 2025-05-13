@@ -24,12 +24,12 @@ async def fetch_unsplash_image(movie_name, unsplash_key):
     queries = [
         f"{movie_name} movie fanart -poster",
         f"{movie_name} cinematic -poster",
-        f"{movie_name} film art -poster"
+        f"{movie_name} movie art -poster"
     ]
     headers = {"Authorization": f"Client-ID {unsplash_key}"}
     async with aiohttp.ClientSession() as session:
         for query in queries:
-            url = f'https://api.unsplash.com/search/photos?query={urllib.parse.quote(query)}&orientation=portrait&per_page=20&order_by=relevant'
+            url = f'https://api.unsplash.com/search/photos?query={urllib.parse.quote(query)}&orientation=portrait&per_page=30&order_by=relevant'
             async with session.get(url, headers=headers) as response:
                 if response.status == 200 and await check_rate_limit(response):
                     data = await response.json()
@@ -67,7 +67,12 @@ async def search_movie(update, context):
                 overview = movie['overview'] if movie['overview'] else 'No plot available'
 
                 # Fetch Unsplash image
-                image_url = await fetch_unsplash_image(title, config.UNSPLASH_API_KEY)
+                try:
+                    image_url = await fetch_unsplash_image(title, config.UNSPLASH_API_KEY)
+                except AttributeError as e:
+                    logger.error(f"Config error: {e}")
+                    await update.message.reply_text('Bot config error: Missing UNSPLASH_API_KEY. Contact admin.')
+                    return
 
                 message = f"**{title} ({year})**\nTMDb Rating: {rating}/10\nPlot: {overview}\n\nData from themoviedb.org"
 
@@ -79,7 +84,7 @@ async def search_movie(update, context):
                 await update.message.reply_text('Movie not found. Please check the name and try again.')
 
 async def error_handler(update, context):
-    logger.error(f'Update {update} caused error {context.error}')
+    logger.error(f"Update {update} caused error {context.error}")
     await update.message.reply_text('Something went wrong. Please try again.')
 
 def main():
