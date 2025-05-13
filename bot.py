@@ -13,29 +13,50 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 async def start(update, context):
-    await update.message.reply_text('Hi! Send me a movie name, and I’ll fetch its details with a custom poster. Data from TMDb.')
+    await update.message.reply_text('Send a movie name, get a copyright-free poster and details. Data from TMDb.')
 
-async def create_custom_poster(title, year):
-    # Create a simple 300x450 image with random background color
-    bg_color = random.choice([(100, 150, 200), (200, 100, 150), (150, 200, 100)])
-    img = Image.new('RGB', (300, 450), bg_color)
+async def create_stylized_poster(title, year):
+    # Create a 300x450 poster with gradient background
+    img = Image.new('RGB', (300, 450))
     draw = ImageDraw.Draw(img)
-
-    # Default font (Pillow uses a basic font if none is specified)
+    # Gradient background
+    for y in range(450):
+        r = int(50 + (y / 450) * 100)
+        g = int(50 + (y / 450) * 50)
+        b = int(100 + (y / 450) * 150)
+        draw.line((0, y, 300, y), fill=(r, g, b))
+    # Border
+    draw.rectangle((10, 10, 290, 440), outline=(255, 255, 255), width=5)
+    # Text
     try:
-        font = ImageFont.truetype("arial.ttf", 24)  # Use Arial if available
+        font = ImageFont.truetype("arial.ttf", 20)
     except:
         font = ImageFont.load_default()
-
-    # Add movie title and year
     text = f"{title}\n({year})"
-    draw.text((20, 200), text, fill=(255, 255, 255), font=font)
-
-    # Save image to bytes
+    draw.text((20, 200), text, fill=(255, 255, 255), font=font, align='center')
+    # Save to bytes
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG')
     img_byte_arr.seek(0)
     return img_byte_arr
+
+async def fetch_wikimedia_poster(movie_name):
+    # Search Wikimedia Commons for public domain posters
+    url = f'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(movie_name + " movie poster")}&srnamespace=6&format=json'
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            data = await response.json()
+            if data['query']['search']:
+                file = data['query']['search'][0]['title']
+                # Get file URL
+                file_url = f'https://commons.wikimedia.org/w/api.php?action=query&titles={urllib.parse.quote(file)}&prop=imageinfo&iiprop=url&format=json'
+                async with session.get(file_url) as file_response:
+                    file_data = await file_response.json()
+                    pages = file_data['query']['pages']
+                    for page in pages.values():
+                        if 'imageinfo' in page:
+                            return page['imageinfo'][0]['url']
+    return None
 
 async def search_movie(update, context):
     movie_name = urllib.parse.quote(update.message.text)
@@ -54,12 +75,16 @@ async def search_movie(update, context):
                 rating = movie['vote_average'] if movie['vote_average'] else 'N/A'
                 overview = movie['overview'] if movie['overview'] else 'No plot available'
 
-                # Generate custom poster
-                poster_file = await create_custom_poster(title, year)
-
-                # Send response
+                # Try to fetch public domain poster from Wikimedia
+                poster_url = await fetch_wikimedia_poster(movie['title'])
                 message = f"**{title} ({year})**\nTMDb Rating: {rating}/10\nPlot: {overview}\n\nData from themoviedb.org"
-                await update.message.reply_photo(photo=poster_file, caption=message, parse_mode='Markdown')
+
+                if poster_url:
+                    await update.message.reply_photo(photo=poster_url, caption=message, parse_mode='Markdown')
+                else:
+                    # Fallback to stylized poster
+                    poster_file = await create_stylized_poster(title, year)
+                    await update.message.reply_photo(photo=poster_file, caption=message, parse_mode='Markdown')
             else:
                 await update.message.reply_text('Movie not found. Please check the name and try again.')
 
