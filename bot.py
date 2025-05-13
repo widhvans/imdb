@@ -11,38 +11,38 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 async def start(update, context):
-    await update.message.reply_text('Send a movie name, get a copyright-free, poster-like fan art or scene image from Pixabay (if available) and details. Data from TMDb.')
+    await update.message.reply_text('Send a movie name, get a copyright-free, poster-like fan art or scene image from Unsplash (if available) and details. Data from TMDb.')
 
 async def check_rate_limit(response):
-    remaining = int(response.headers.get('X-RateLimit-Remaining', 100))
-    if remaining < 10:
-        reset_time = int(response.headers.get('X-RateLimit-Reset', 60))
-        logger.warning(f"Pixabay rate limit low: {remaining} requests left. Pausing for {reset_time} seconds.")
-        await asyncio.sleep(reset_time)
+    remaining = int(response.headers.get('X-Ratelimit-Remaining', 50))
+    if remaining < 5:
+        logger.warning(f"Unsplash rate limit low: {remaining} requests left. Pausing for 3600 seconds.")
+        await asyncio.sleep(3600)  # Wait 1 hour
     return remaining > 0
 
-async def fetch_pixabay_image(movie_name, pixabay_key):
+async def fetch_unsplash_image(movie_name, unsplash_key):
     queries = [
         f"{movie_name} movie fanart -poster",
-        f"{movie_name} movie scene -poster",
+        f"{movie_name} cinematic -poster",
         f"{movie_name} film art -poster"
     ]
+    headers = {"Authorization": f"Client-ID {unsplash_key}"}
     async with aiohttp.ClientSession() as session:
         for query in queries:
-            url = f'https://pixabay.com/api/?key={pixabay_key}&q={urllib.parse.quote(query)}&image_type=photo,illustration&safesearch=true&min_width=500&per_page=20&order=popular'
-            async with session.get(url) as response:
+            url = f'https://api.unsplash.com/search/photos?query={urllib.parse.quote(query)}&orientation=portrait&per_page=20&order_by=relevant'
+            async with session.get(url, headers=headers) as response:
                 if response.status == 200 and await check_rate_limit(response):
                     data = await response.json()
-                    logger.info(f"Pixabay query '{query}': {len(data.get('hits', []))} hits")
-                    if data['hits']:
+                    logger.info(f"Unsplash query '{query}': {len(data.get('results', []))} hits")
+                    if data['results']:
                         # Pick image with most likes
-                        best_hit = max(data['hits'], key=lambda x: x['likes'])
-                        return best_hit['largeImageURL']
+                        best_hit = max(data['results'], key=lambda x: x['likes'])
+                        return best_hit['urls']['regular']
                 elif response.status == 429:
-                    logger.error(f"Pixabay rate limit exceeded for query '{query}' (HTTP 429).")
+                    logger.error(f"Unsplash rate limit exceeded for query '{query}' (HTTP 429).")
                     return None
                 else:
-                    logger.error(f"Pixabay query '{query}' failed with status {response.status}")
+                    logger.error(f"Unsplash query '{query}' failed with status {response.status}")
     return None
 
 async def search_movie(update, context):
@@ -66,15 +66,15 @@ async def search_movie(update, context):
                 rating = movie['vote_average'] if movie['vote_average'] else 'N/A'
                 overview = movie['overview'] if movie['overview'] else 'No plot available'
 
-                # Fetch Pixabay image
-                image_url = await fetch_pixabay_image(title, config.PIXABAY_API_KEY)
+                # Fetch Unsplash image
+                image_url = await fetch_unsplash_image(title, config.UNSPLASH_API_KEY)
 
                 message = f"**{title} ({year})**\nTMDb Rating: {rating}/10\nPlot: {overview}\n\nData from themoviedb.org"
 
                 if image_url:
-                    await update.message.reply_photo(photo=image_url, caption=f"{message}\n\nImage from Pixabay", parse_mode='Markdown')
+                    await update.message.reply_photo(photo=image_url, caption=f"{message}\n\nImage from Unsplash", parse_mode='Markdown')
                 else:
-                    await update.message.reply_text(f"{message}\n\nNo copyright-free fan art or scene image found on Pixabay for '{title}'. Try popular movies like 'Avengers' or 'Star Wars'.", parse_mode='Markdown')
+                    await update.message.reply_text(f"{message}\n\nNo copyright-free fan art or scene image found on Unsplash for '{title}'. Try popular movies like 'Avengers' or 'Star Wars'.", parse_mode='Markdown')
             else:
                 await update.message.reply_text('Movie not found. Please check the name and try again.')
 
