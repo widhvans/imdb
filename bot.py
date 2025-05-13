@@ -15,10 +15,11 @@ async def start(update, context):
 async def search_movie(update, context):
     movie_name = urllib.parse.quote(update.message.text)
     api_key = config.TMDB_API_KEY
-    url = f'https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={movie_name}'
-
+    search_url = f'https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={movie_name}'
+    
     async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
+        # Fetch movie data
+        async with session.get(search_url) as response:
             data = await response.json()
 
             if data['results']:
@@ -29,9 +30,16 @@ async def search_movie(update, context):
                 overview = movie['overview'] if movie['overview'] else 'No plot available'
                 poster_path = movie['poster_path']
 
-                message = f"**{title} ({year})**\nTMDb Rating: {rating}\nPlot: {overview}"
+                # Fetch configuration for poster base URL
+                config_url = f'https://api.themoviedb.org/3/configuration?api_key={api_key}'
+                async with session.get(config_url) as config_response:
+                    config_data = await config_response.json()
+                    base_url = config_data['images']['secure_base_url']
+                    poster_size = 'w500'  # Using w500 as per documentation for posters
+
+                message = f"**{title} ({year})**\nTMDb Rating: {rating}/10\nPlot: {overview}"
                 if poster_path:
-                    poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}"
+                    poster_url = f"{base_url}{poster_size}{poster_path}"
                     await update.message.reply_photo(photo=poster_url, caption=message, parse_mode='Markdown')
                 else:
                     await update.message.reply_text(message, parse_mode='Markdown')
