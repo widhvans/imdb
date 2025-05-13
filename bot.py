@@ -10,7 +10,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 async def start(update, context):
-    await update.message.reply_text('Hi! Send me a movie name, and I’ll fetch its poster and details.')
+    await update.message.reply_text('Hi! Send me a movie name, and I’ll fetch its details. Data from TMDb.')
 
 async def search_movie(update, context):
     movie_name = urllib.parse.quote(update.message.text)
@@ -35,10 +35,10 @@ async def search_movie(update, context):
                 async with session.get(config_url) as config_response:
                     config_data = await config_response.json()
                     base_url = config_data['images']['secure_base_url']
-                    poster_size = 'w500'  # Using w500 as per documentation for posters
+                    poster_size = 'w500'
 
-                message = f"**{title} ({year})**\nTMDb Rating: {rating}/10\nPlot: {overview}"
-                if poster_path:
+                message = f"**{title} ({year})**\nTMDb Rating: {rating}/10\nPlot: {overview}\n\nData from themoviedb.org"
+                if poster_path and config.USE_POSTERS:
                     poster_url = f"{base_url}{poster_size}{poster_path}"
                     await update.message.reply_photo(photo=poster_url, caption=message, parse_mode='Markdown')
                 else:
