@@ -22,18 +22,27 @@ async def check_rate_limit(response):
     return remaining > 0
 
 async def fetch_pixabay_image(movie_name, pixabay_key):
-    url = f'https://pixabay.com/api/?key={pixabay_key}&q={urllib.parse.quote(movie_name + " movie fanart scene -poster")}&image_type=photo,illustration&category=art&safesearch=true&per_page=10&order=popular'
+    queries = [
+        f"{movie_name} movie fanart -poster",
+        f"{movie_name} movie scene -poster",
+        f"{movie_name} film art -poster"
+    ]
     async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200 and await check_rate_limit(response):
-                data = await response.json()
-                if data['hits']:
-                    # Pick the most relevant image (highest views)
-                    best_hit = max(data['hits'], key=lambda x: x['views'])
-                    return best_hit['largeImageURL']
-            elif response.status == 429:
-                logger.error("Pixabay rate limit exceeded (HTTP 429).")
-                return None
+        for query in queries:
+            url = f'https://pixabay.com/api/?key={pixabay_key}&q={urllib.parse.quote(query)}&image_type=photo,illustration&safesearch=true&min_width=500&per_page=20&order=popular'
+            async with session.get(url) as response:
+                if response.status == 200 and await check_rate_limit(response):
+                    data = await response.json()
+                    logger.info(f"Pixabay query '{query}': {len(data.get('hits', []))} hits")
+                    if data['hits']:
+                        # Pick image with most likes
+                        best_hit = max(data['hits'], key=lambda x: x['likes'])
+                        return best_hit['largeImageURL']
+                elif response.status == 429:
+                    logger.error(f"Pixabay rate limit exceeded for query '{query}' (HTTP 429).")
+                    return None
+                else:
+                    logger.error(f"Pixabay query '{query}' failed with status {response.status}")
     return None
 
 async def search_movie(update, context):
@@ -65,7 +74,7 @@ async def search_movie(update, context):
                 if image_url:
                     await update.message.reply_photo(photo=image_url, caption=f"{message}\n\nImage from Pixabay", parse_mode='Markdown')
                 else:
-                    await update.message.reply_text(f"{message}\n\nNo copyright-free fan art or scene image found on Pixabay. Try another movie name.", parse_mode='Markdown')
+                    await update.message.reply_text(f"{message}\n\nNo copyright-free fan art or scene image found on Pixabay for '{title}'. Try popular movies like 'Avengers' or 'Star Wars'.", parse_mode='Markdown')
             else:
                 await update.message.reply_text('Movie not found. Please check the name and try again.')
 
